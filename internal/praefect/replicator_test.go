@@ -159,7 +159,7 @@ func TestReplMgr_ProcessBacklog(t *testing.T) {
 	logEntries := loggerHook.AllEntries()
 	require.True(t, len(logEntries) > 4, "expected at least 5 log entries to be present")
 	require.Equal(t,
-		[]interface{}{`parallel processing workers decreased from 100 configured with config to 1 according to minumal amount of storages in the virtual storage "virtual"`},
+		[]interface{}{`parallel processing workers decreased from 100 configured with config to 2 according to minumal amount of storages in the virtual storage "virtual"`},
 		[]interface{}{logEntries[0].Message},
 	)
 
@@ -1092,5 +1092,71 @@ func TestReplMgr_CleanUpLocks(t *testing.T) {
 		require.NotNil(t, cleanupEntry, "cleanup log entry not found")
 		require.Equal(t, "CleanUpLocks", cleanupEntry.Data["component"])
 		require.Equal(t, int64(2), cleanupEntry.Data["count"])
+	})
+}
+
+func TestNewReplMgr_parallelStorageProcessingWorkers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clamps workers to physical storage count inside single virtual storage", func(t *testing.T) {
+		t.Parallel()
+
+		logger := testhelper.SharedLogger(t)
+		hook := testhelper.AddLoggerHook(logger)
+
+		storageNames := map[string][]string{
+			"virtual-1": {"gitaly-1", "gitaly-2"},
+		}
+
+		mgr := NewReplMgr(
+			logger.WithField("test", t.Name()),
+			storageNames,
+			datastore.NewReplicationEventQueueInterceptor(nil),
+			datastore.MockRepositoryStore{},
+			nil,
+			nil,
+			WithParallelStorageProcessingWorkers(10),
+		)
+
+		require.Equal(t, uint(2), mgr.parallelStorageProcessingWorkers)
+
+		entries := hook.AllEntries()
+		require.Len(t, entries, 1)
+		require.Equal(t,
+			`parallel processing workers decreased from 10 configured with config to 2 according to minumal amount of storages in the virtual storage "virtual-1"`,
+			entries[0].Message,
+		)
+	})
+
+	t.Run("clamps workers to minimum physical storage count across multiple virtual storages", func(t *testing.T) {
+		t.Parallel()
+
+		logger := testhelper.SharedLogger(t)
+		hook := testhelper.AddLoggerHook(logger)
+
+		storageNames := map[string][]string{
+			"virtual-1": {"gitaly-1", "gitaly-2", "gitaly-3"},
+			"virtual-2": {"gitaly-4"},
+			"virtual-3": {"gitaly-5", "gitaly-6", "gitaly-7"},
+		}
+
+		mgr := NewReplMgr(
+			logger.WithField("test", t.Name()),
+			storageNames,
+			datastore.NewReplicationEventQueueInterceptor(nil),
+			datastore.MockRepositoryStore{},
+			nil,
+			nil,
+			WithParallelStorageProcessingWorkers(2),
+		)
+
+		require.Equal(t, uint(1), mgr.parallelStorageProcessingWorkers)
+
+		entries := hook.AllEntries()
+		require.Len(t, entries, 1)
+		require.Equal(t,
+			`parallel processing workers decreased from 2 configured with config to 1 according to minumal amount of storages in the virtual storage "virtual-2"`,
+			entries[0].Message,
+		)
 	})
 }

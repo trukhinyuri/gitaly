@@ -177,6 +177,7 @@ func (s *memoryReplicationEventQueue) Acknowledge(_ context.Context, state JobSt
 
 					if bytes.Equal(ackJobData, sameJobData) {
 						s.remove(j)
+						j--
 					}
 				}
 			}

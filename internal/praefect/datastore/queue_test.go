@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/praefect/config"
 	"gitlab.com/gitlab-org/gitaly/v19/internal/testhelper"
 	"gitlab.com/gitlab-org/gitaly/v19/internal/testhelper/testdb"
 )
@@ -1299,4 +1300,36 @@ func fetchJobLocks(t *testing.T, ctx context.Context, db testdb.DB) []JobLockRow
 	require.NoError(t, rows.Err(), "completion of result loop scan")
 
 	return entries
+}
+
+func TestMemoryReplicationEventQueue_AcknowledgeDuplicateEvents(t *testing.T) {
+	t.Parallel()
+	ctx := testhelper.Context(t)
+
+	queue := NewMemoryReplicationEventQueue(config.Config{})
+
+	job := ReplicationJob{
+		Change:            UpdateRepo,
+		RelativePath:      "/project/path-1",
+		VirtualStorage:    "praefect",
+		TargetNodeStorage: "storage-1",
+		SourceNodeStorage: "storage-0",
+	}
+
+	for range 3 {
+		_, err := queue.Enqueue(ctx, ReplicationEvent{Job: job})
+		require.NoError(t, err)
+	}
+
+	dequeued, err := queue.Dequeue(ctx, "praefect", "storage-1", 10)
+	require.NoError(t, err)
+	require.Len(t, dequeued, 1)
+
+	acknowledged, err := queue.Acknowledge(ctx, JobStateCompleted, []uint64{dequeued[0].ID})
+	require.NoError(t, err)
+	require.Equal(t, []uint64{dequeued[0].ID}, acknowledged)
+
+	remaining, err := queue.Dequeue(ctx, "praefect", "storage-1", 10)
+	require.NoError(t, err)
+	require.Empty(t, remaining, "all duplicate ready events created before dequeue must be removed")
 }

@@ -273,9 +273,9 @@ func NewReplMgr(log log.Logger, storageNames map[string][]string, queue datastor
 			r.log.Info(fmt.Sprintf("parallel processing workers decreased from %d "+
 				"configured with config to %d according to minumal amount of "+
 				"storages in the virtual storage %q",
-				r.parallelStorageProcessingWorkers, len(storageNames), virtual,
+				r.parallelStorageProcessingWorkers, len(sn), virtual,
 			))
-			r.parallelStorageProcessingWorkers = uint(len(storageNames))
+			r.parallelStorageProcessingWorkers = uint(len(sn))
 		}
 	}
 	return r
