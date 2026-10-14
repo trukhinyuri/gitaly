@@ -1,0 +1,28 @@
+package analysis
+
+import (
+	"gitlab.com/gitlab-org/gitaly/v19/internal/git/catfile"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/git/localrepo"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/service"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/storage"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/log"
+	"gitlab.com/gitlab-org/gitaly/v19/proto/go/gitalypb"
+)
+
+type server struct {
+	gitalypb.UnimplementedAnalysisServiceServer
+	logger           log.Logger
+	locator          storage.Locator
+	catfileCache     catfile.Cache
+	localRepoFactory localrepo.Factory
+}
+
+// NewServer creates a new instance of the gRPC AnalysisService.
+func NewServer(deps *service.Dependencies) gitalypb.AnalysisServiceServer {
+	return &server{
+		logger:           deps.GetLogger(),
+		locator:          deps.GetLocator(),
+		catfileCache:     deps.GetCatfileCache(),
+		localRepoFactory: deps.GetRepositoryFactory(),
+	}
+}

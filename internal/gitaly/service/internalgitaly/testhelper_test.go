@@ -1,0 +1,48 @@
+package internalgitaly
+
+import (
+	"errors"
+	"io"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/config"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/service"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/grpc/client"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/testhelper"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/testhelper/testserver"
+	"gitlab.com/gitlab-org/gitaly/v19/proto/go/gitalypb"
+	"google.golang.org/grpc"
+)
+
+func TestMain(m *testing.M) {
+	testhelper.Run(m)
+}
+
+func setupInternalGitalyService(t *testing.T, cfg config.Cfg, internalService gitalypb.InternalGitalyServer) gitalypb.InternalGitalyClient {
+	add := testserver.RunGitalyServer(t, cfg, func(srv *grpc.Server, deps *service.Dependencies) {
+		gitalypb.RegisterInternalGitalyServer(srv, internalService)
+	}, testserver.WithDisablePraefect())
+	conn, err := client.New(testhelper.Context(t), add)
+	require.NoError(t, err)
+	t.Cleanup(func() { testhelper.MustClose(t, conn) })
+
+	return gitalypb.NewInternalGitalyClient(conn)
+}
+
+type streamClient[T any] interface {
+	Recv() (T, error)
+}
+
+func consumeServerStream[T any](t *testing.T, stream streamClient[T]) []T {
+	var results []T
+	for {
+		resp, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err)
+		results = append(results, resp)
+	}
+	return results
+}

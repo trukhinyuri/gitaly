@@ -1,0 +1,31 @@
+package internalgitaly
+
+import (
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/config"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/service"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/storage"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/storage/relational"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitlab"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/log"
+	"gitlab.com/gitlab-org/gitaly/v19/proto/go/gitalypb"
+)
+
+type server struct {
+	gitalypb.UnimplementedInternalGitalyServer
+	logger       log.Logger
+	storages     []config.Storage
+	locator      storage.Locator
+	poolStore    relational.PoolStore
+	gitlabClient gitlab.Client
+}
+
+// NewServer return an instance of the Gitaly service.
+func NewServer(deps *service.Dependencies) gitalypb.InternalGitalyServer {
+	return &server{
+		logger:       deps.GetLogger(),
+		storages:     deps.GetCfg().Storages,
+		locator:      deps.GetLocator(),
+		poolStore:    deps.GetPoolMetadataStore(),
+		gitlabClient: deps.GetGitlabClient(),
+	}
+}
